@@ -132,12 +132,12 @@ From idea → code → API integration → GitHub → deployment.
 
 ### Home
 
-![PDF Insight Home](screenshots/home.png)
+![PDF Insight Home](./screenshots/home.png)
 
 ### Job Analysis
 
-![PDF Insight Analysis](screenshots/analysis.png)
+![PDF Insight Analysis](./screenshots/analysis.png)
 
 ### Application
 
-![PDF Insight Application](screenshots/application.png)
+![PDF Insight Application](./screenshots/application.png)
