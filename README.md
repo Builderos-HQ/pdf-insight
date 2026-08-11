@@ -122,3 +122,22 @@ This project is actively being improved as part of my AI development journey.
 Built as a hands-on AI product development project.
 
 From idea → code → API integration → GitHub → deployment.
+## 👨‍💻 Built With
+
+Built as a hands-on AI product development project.
+
+From idea → code → API integration → GitHub → deployment.
+
+## 📸 Screenshots
+
+### Home
+
+![PDF Insight Home](screenshots/home.png)
+
+### Job Analysis
+
+![PDF Insight Analysis](screenshots/analysis.png)
+
+### Application
+
+![PDF Insight Application](screenshots/application.png)
