@@ -50,19 +50,22 @@ class JobAnalysis(BaseModel):
 st.set_page_config(
     page_title="PDF Insight",
     page_icon="📄",
-    layout="wide"
+    layout="wide",
 )
 
 
 # ==========================================
-# Header
+# Header / Branding
 # ==========================================
 
 st.title("📄 PDF Insight")
 
-st.write(
-    "AIでフリーランス案件を分析し、"
-    "応募すべき案件を判断します。"
+st.subheader(
+    "Find the right jobs. Apply with confidence."
+)
+
+st.caption(
+    "AI-powered freelance job screening"
 )
 
 
@@ -72,50 +75,74 @@ st.write(
 
 with st.sidebar:
 
-    st.header("👤 あなたについて")
+    st.header("👤 Your Profile")
 
     user_skills = st.text_area(
-        "スキル",
+        "Your skills",
         placeholder=(
             "Python\n"
             "Streamlit\n"
             "OpenAI API\n"
             "GitHub\n"
-            "Web開発"
+            "Web development"
         ),
-        height=180
+        height=180,
     )
 
     st.caption(
-        "案件とのスキル適合度の判定に使用します。"
+        "Your skills are used to calculate Job Fit."
+    )
+
+    st.divider()
+
+    st.caption("PDF Insight")
+
+    st.caption(
+        "AI-assisted job screening for freelancers."
     )
 
 
 # ==========================================
-# Upload
+# Upload section
 # ==========================================
 
-st.subheader("📄 案件PDF")
+st.subheader("📄 Upload a Job")
 
 uploaded_file = st.file_uploader(
-    "案件PDFをアップロード",
-    type=["pdf"]
+    "Upload a freelance job PDF",
+    type=["pdf"],
 )
 
 
 # ==========================================
-# Main process
+# No file uploaded
 # ==========================================
 
-if uploaded_file is not None:
+if uploaded_file is None:
+
+    st.info(
+        "👆 Upload a job PDF to get started."
+    )
+
+
+# ==========================================
+# File uploaded
+# ==========================================
+
+else:
 
     st.success(
         f"✓ {uploaded_file.name}"
     )
 
+
+    # --------------------------------------
+    # Read PDF
+    # --------------------------------------
+
     pdf = fitz.open(
         stream=uploaded_file.read(),
-        filetype="pdf"
+        filetype="pdf",
     )
 
     text = ""
@@ -125,32 +152,39 @@ if uploaded_file is not None:
 
 
     st.caption(
-        f"{len(pdf)}ページのPDFを読み込みました。"
+        f"{len(pdf)} page(s) loaded"
+    )
+
+
+    # --------------------------------------
+    # Analyze button
+    # --------------------------------------
+
+    analyze_button = st.button(
+        "🤖 Analyze Job",
+        type="primary",
+        use_container_width=True,
     )
 
 
     # ======================================
-    # Analyze
+    # AI analysis
     # ======================================
 
-    if st.button(
-        "🤖 AIで分析する",
-        type="primary",
-        use_container_width=True
-    ):
+    if analyze_button:
 
         if not user_skills.strip():
 
             st.warning(
-                "左側の「あなたについて」に"
-                "スキルを入力してください。"
+                "Please enter your skills in "
+                "the sidebar first."
             )
 
             st.stop()
 
 
         with st.spinner(
-            "AIが案件を分析しています..."
+            "Analyzing the job..."
         ):
 
             response = client.responses.parse(
@@ -158,142 +192,153 @@ if uploaded_file is not None:
                 model="gpt-5",
 
                 input=f"""
-あなたはフリーランス案件の
-AIスクリーニングアシスタントです。
+You are an AI freelance job screening assistant.
 
-以下の案件PDFを分析してください。
+Analyze the following freelance job PDF.
 
-日本語で回答してください。
+Respond in Japanese because the user prefers
+Japanese explanations.
 
 
-================================
-案件おすすめ度
-================================
+========================================
+JOB FIT SCORE
+========================================
 
 score:
 
-応募おすすめ度を1〜10で評価。
+Rate how attractive this job is for the user
+from 1 to 10.
+
+10 = excellent opportunity
+1 = poor opportunity
 
 
-================================
-応募判断
-================================
+========================================
+DECISION
+========================================
 
 decision:
 
-以下から1つ：
+Choose exactly one:
 
 - 応募する
 - 検討する
 - 応募しない
 
 
-================================
-評価理由
-================================
+========================================
+REASONS
+========================================
 
 score_reasons:
 
-おすすめ度の理由。
+Provide reasons for the score.
 
-良い点はプラス、
-悪い点はマイナス。
+Positive factors should have positive points.
+Negative factors should have negative points.
 
 
-================================
-重要ポイント
-================================
+========================================
+IMPORTANT POINTS
+========================================
 
 summary:
 
-重要な内容を3〜5個。
+Summarize the most important job information
+in 3 to 5 points.
 
 
-================================
-案件条件
-================================
+========================================
+JOB CONDITIONS
+========================================
 
 conditions:
 
-- 報酬
-- 納期
-- 必要スキル
-- 作業内容
-- 応募条件
+Extract useful information such as:
+
+- compensation
+- deadline
+- required skills
+- responsibilities
+- working hours
+- application requirements
 
 
-================================
-注意点
-================================
+========================================
+WARNINGS
+========================================
 
 warnings:
 
-リスクや注意点。
+Identify risks, unclear requirements,
+or potential problems.
 
 
-================================
-次にやること
-================================
+========================================
+NEXT ACTIONS
+========================================
 
 next_actions:
 
-次にやるべきことを3つ以内。
+Give up to 3 practical next steps.
 
 
-================================
-あなたとの相性
-================================
+========================================
+SKILL MATCH
+========================================
 
-ユーザーのスキル：
+User skills:
 
 {user_skills}
 
 
 match_score:
 
-ユーザーと案件の適合度を
-0〜100で評価。
+Rate how well the user's skills match
+the job from 0 to 100.
 
 
 match_summary:
 
-適合度について説明。
+Explain the skill match.
 
 
 skill_matches:
 
-案件の重要スキルについて、
+For important job skills provide:
 
 skill:
-スキル名
+skill name
 
 matched:
-ユーザーが持っていればtrue、
-持っていなければfalse
+true if the user has the skill,
+false otherwise
 
 comment:
-理由
+short explanation
 
 
-================================
-応募文
-================================
+========================================
+APPLICATION MESSAGE
+========================================
 
 application_message:
 
-案件に応募するための
-自然で簡潔な応募文。
+Write a concise and professional
+application message for this job.
 
-ユーザーのスキルを反映。
+Use the user's actual skills.
 
-経験について嘘を書かない。
+Do not invent experience.
 
-日本語で作成。
+Do not claim skills the user did not provide.
+
+Write in natural Japanese.
 
 
-================================
-PDF
-================================
+========================================
+JOB PDF
+========================================
 
 {text}
 """,
@@ -301,43 +346,47 @@ PDF
                 text_format=JobAnalysis,
             )
 
+
             analysis = response.output_parsed
 
 
         # ==================================
-        # RESULT
+        # Results
         # ==================================
 
         st.divider()
 
-        st.header("📊 分析結果")
+        st.header("🎯 Your Result")
 
 
-        # ==================================
-        # Top result
-        # ==================================
+        # ----------------------------------
+        # Decision
+        # ----------------------------------
 
         if analysis.decision == "応募する":
 
             st.success(
-                "🟢 この案件は応募がおすすめです"
+                "🟢 APPLY — This job looks "
+                "worth applying to."
             )
 
         elif analysis.decision == "検討する":
 
             st.warning(
-                "🟡 この案件は検討する価値があります"
+                "🟡 CONSIDER — Review the details "
+                "before applying."
             )
 
         else:
 
             st.error(
-                "🔴 この案件はおすすめしません"
+                "🔴 SKIP — This job may not be "
+                "a good fit."
             )
 
 
         # ==================================
-        # Score columns
+        # Main scores
         # ==================================
 
         col1, col2 = st.columns(2)
@@ -346,8 +395,8 @@ PDF
         with col1:
 
             st.metric(
-                "⭐ おすすめ度",
-                f"{analysis.score} / 10"
+                "⭐ Job Fit",
+                f"{analysis.score} / 10",
             )
 
             st.progress(
@@ -358,8 +407,8 @@ PDF
         with col2:
 
             st.metric(
-                "🎯 あなたとの相性",
-                f"{analysis.match_score}%"
+                "🎯 Skill Match",
+                f"{analysis.match_score}%",
             )
 
             st.progress(
@@ -368,12 +417,13 @@ PDF
 
 
         # ==================================
-        # Score reasons
+        # Why this score?
         # ==================================
 
         st.divider()
 
-        st.subheader("💡 なぜこの評価？")
+        st.subheader("💡 Why this score?")
+
 
         for item in analysis.score_reasons:
 
@@ -398,7 +448,12 @@ PDF
 
         st.divider()
 
-        st.subheader("🧩 スキル照合")
+        st.subheader("🧩 Skill Match")
+
+        st.write(
+            analysis.match_summary
+        )
+
 
         for item in analysis.skill_matches:
 
@@ -418,12 +473,13 @@ PDF
 
 
         # ==================================
-        # Summary
+        # Job summary
         # ==================================
 
         st.divider()
 
-        st.subheader("📌 重要ポイント")
+        st.subheader("📌 Key Points")
+
 
         for item in analysis.summary:
 
@@ -433,7 +489,7 @@ PDF
 
 
         # ==================================
-        # Conditions / warnings
+        # Conditions / Warnings
         # ==================================
 
         st.divider()
@@ -443,7 +499,7 @@ PDF
 
         with col1:
 
-            st.subheader("💼 案件条件")
+            st.subheader("💼 Job Conditions")
 
             for item in analysis.conditions:
 
@@ -454,7 +510,7 @@ PDF
 
         with col2:
 
-            st.subheader("⚠️ 注意点")
+            st.subheader("⚠️ Watch Out")
 
             for item in analysis.warnings:
 
@@ -464,16 +520,17 @@ PDF
 
 
         # ==================================
-        # Next actions
+        # Next steps
         # ==================================
 
         st.divider()
 
-        st.subheader("🚀 次にやること")
+        st.subheader("🚀 Next Steps")
+
 
         for i, item in enumerate(
             analysis.next_actions,
-            start=1
+            start=1,
         ):
 
             st.write(
@@ -482,29 +539,47 @@ PDF
 
 
         # ==================================
-        # Application
+        # AI Application
         # ==================================
 
         st.divider()
 
-        st.header("✍️ AI応募文")
+        st.header("✍️ AI Application")
 
-        st.text_area(
-            "応募文を確認・編集してください",
+
+        application = st.text_area(
+            "Review and edit before sending",
             value=analysis.application_message,
-            height=300
+            height=300,
         )
+
 
         st.info(
-            "💡 応募前に必ず内容を確認し、"
-            "自分の経験に合わせて編集してください。"
+            "💡 Always review the application "
+            "and make sure it accurately represents "
+            "your experience."
         )
 
 
-else:
+        # ==================================
+        # Download application
+        # ==================================
 
-    st.info(
-        "👆 案件PDFをアップロードして"
-        "AI分析を始めましょう。"
-    )
-    
+        st.download_button(
+            label="📥 Download Application",
+            data=application,
+            file_name="application.txt",
+            mime="text/plain",
+            use_container_width=True,
+        )
+
+
+# ==========================================
+# Footer
+# ==========================================
+
+st.divider()
+
+st.caption(
+    "PDF Insight • AI-powered freelance job screening"
+)
