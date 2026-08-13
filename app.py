@@ -1,5 +1,6 @@
 import streamlit as st
 import fitz
+import base64
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel
@@ -135,26 +136,56 @@ else:
         f"✓ {uploaded_file.name}"
     )
 
-
     # --------------------------------------
     # Read PDF
     # --------------------------------------
 
+    pdf_bytes = uploaded_file.getvalue()
+
     pdf = fitz.open(
-        stream=uploaded_file.read(),
+        stream=pdf_bytes,
         filetype="pdf",
     )
 
-    text = ""
+    # Extract normal text first.
+    text_parts = []
 
     for page in pdf:
-        text += page.get_text()
+        page_text = page.get_text("text")
 
+        if page_text:
+            text_parts.append(page_text)
+
+    text = "\n".join(text_parts).strip()
+
+    # --------------------------------------
+    # Detect PDF type
+    # --------------------------------------
+
+    # A PDF can contain visible text while having
+    # very little extractable text. In that case,
+    # treat it as an image/screenshot PDF.
+
+    MIN_TEXT_CHARS = 200
+
+    is_image_pdf = len(text) < MIN_TEXT_CHARS
 
     st.caption(
         f"{len(pdf)} page(s) loaded"
     )
 
+    if is_image_pdf:
+
+        st.info(
+            "🖼️ Image-based PDF detected. "
+            "PDF Insight will analyze the page images."
+        )
+
+    else:
+
+        st.success(
+            "📄 Text-based PDF detected."
+        )
 
     # --------------------------------------
     # Analyze button
@@ -165,7 +196,6 @@ else:
         type="primary",
         use_container_width=True,
     )
-
 
     # ======================================
     # AI analysis
@@ -182,19 +212,48 @@ else:
 
             st.stop()
 
-
         with st.spinner(
             "Analyzing the job..."
         ):
 
-            response = client.responses.parse(
+            # ======================================
+            # AI instructions
+            # ======================================
 
-                model="gpt-5",
-
-                input=f"""
+            instructions = f"""
 You are an AI freelance job screening assistant.
 
-Analyze the following freelance job PDF.
+Analyze the freelance job listing provided below.
+
+IMPORTANT RULES:
+
+1. Use ONLY information actually present in the job listing.
+
+2. If a piece of information is not present,
+   say:
+   "Not specified in the job listing."
+
+3. NEVER say that the PDF was not provided
+   when a PDF has been successfully uploaded.
+
+4. Do not invent compensation, requirements,
+   deadlines, skills, responsibilities,
+   experience, or working conditions.
+
+5. If the job listing is provided as images,
+   carefully read the visible text in the images.
+
+6. Distinguish between:
+   - information that is actually missing
+   - information that is present in the listing
+
+7. If compensation is visible, report it accurately.
+
+8. If required skills are visible, report them accurately.
+
+9. Base the Job Fit score and Skill Match score
+   on the actual job listing and the user's
+   actual skills.
 
 Respond in Japanese because the user prefers
 Japanese explanations.
@@ -235,7 +294,15 @@ score_reasons:
 Provide reasons for the score.
 
 Positive factors should have positive points.
+
 Negative factors should have negative points.
+
+Every reason must be based on actual
+information from the job listing or the
+user's skills.
+
+Do not claim that information is missing
+when it is actually present.
 
 
 ========================================
@@ -246,6 +313,11 @@ summary:
 
 Summarize the most important job information
 in 3 to 5 points.
+
+Include compensation when available.
+
+Include important responsibilities and
+requirements when available.
 
 
 ========================================
@@ -262,6 +334,12 @@ Extract useful information such as:
 - responsibilities
 - working hours
 - application requirements
+- contract conditions
+
+If a specific item is not present,
+say:
+
+"Not specified in the job listing."
 
 
 ========================================
@@ -272,6 +350,9 @@ warnings:
 
 Identify risks, unclear requirements,
 or potential problems.
+
+Do not describe information as missing
+unless it is actually missing from the listing.
 
 
 ========================================
@@ -334,17 +415,141 @@ Do not invent experience.
 Do not claim skills the user did not provide.
 
 Write in natural Japanese.
+"""
 
+
+            # ======================================
+            # TEXT-BASED PDF
+            # ======================================
+
+            if not is_image_pdf:
+
+                response = client.responses.parse(
+                    model="gpt-5",
+
+                    input=[
+                        {
+                            "role": "user",
+
+                            "content": [
+                                {
+                                    "type": "input_text",
+
+                                    "text": (
+                                        instructions
+                                        +
+                                        """
 
 ========================================
-JOB PDF
+JOB PDF TEXT
 ========================================
 
-{text}
-""",
+"""
+                                        +
+                                        text
+                                    ),
+                                }
+                            ],
+                        }
+                    ],
 
-                text_format=JobAnalysis,
-            )
+                    text_format=JobAnalysis,
+                )
+
+
+            # ======================================
+            # IMAGE-BASED PDF
+            # ======================================
+
+            else:
+
+                content = [
+                    {
+                        "type": "input_text",
+
+                        "text": (
+                            instructions
+                            +
+                            """
+
+========================================
+JOB PDF IMAGES
+========================================
+
+The job listing is provided as page images.
+
+Carefully read the visible text in every
+provided page.
+
+Extract job title, compensation,
+responsibilities, required skills,
+conditions, and other useful information
+from the images.
+
+Do not assume that information is missing
+simply because it is not available as
+machine-readable PDF text.
+"""
+                        ),
+                    }
+                ]
+
+                # ----------------------------------
+                # Render PDF pages as JPEG images
+                # ----------------------------------
+
+                MAX_IMAGE_PAGES = 10
+
+                pages_to_process = min(
+                    len(pdf),
+                    MAX_IMAGE_PAGES,
+                )
+
+                for page_number in range(
+                    pages_to_process
+                ):
+
+                    page = pdf[page_number]
+
+                    pix = page.get_pixmap(
+                        matrix=fitz.Matrix(2, 2),
+                        alpha=False,
+                    )
+
+                    image_bytes = pix.tobytes(
+                        "jpeg"
+                    )
+
+                    image_base64 = (
+                        base64.b64encode(
+                            image_bytes
+                        ).decode("utf-8")
+                    )
+
+                    content.append(
+                        {
+                            "type": "input_image",
+
+                            "image_url": (
+                                "data:image/jpeg;base64,"
+                                +
+                                image_base64
+                            ),
+                        }
+                    )
+
+                response = client.responses.parse(
+                    model="gpt-5",
+
+                    input=[
+                        {
+                            "role": "user",
+                            "content": content,
+                        }
+                    ],
+
+                    text_format=JobAnalysis,
+                )
 
 
             analysis = response.output_parsed
@@ -422,7 +627,9 @@ JOB PDF
 
         st.divider()
 
-        st.subheader("💡 Why this score?")
+        st.subheader(
+            "💡 Why this score?"
+        )
 
 
         for item in analysis.score_reasons:
@@ -448,7 +655,9 @@ JOB PDF
 
         st.divider()
 
-        st.subheader("🧩 Skill Match")
+        st.subheader(
+            "🧩 Skill Match"
+        )
 
         st.write(
             analysis.match_summary
@@ -478,7 +687,9 @@ JOB PDF
 
         st.divider()
 
-        st.subheader("📌 Key Points")
+        st.subheader(
+            "📌 Key Points"
+        )
 
 
         for item in analysis.summary:
@@ -499,7 +710,9 @@ JOB PDF
 
         with col1:
 
-            st.subheader("💼 Job Conditions")
+            st.subheader(
+                "💼 Job Conditions"
+            )
 
             for item in analysis.conditions:
 
@@ -510,7 +723,9 @@ JOB PDF
 
         with col2:
 
-            st.subheader("⚠️ Watch Out")
+            st.subheader(
+                "⚠️ Watch Out"
+            )
 
             for item in analysis.warnings:
 
@@ -525,7 +740,9 @@ JOB PDF
 
         st.divider()
 
-        st.subheader("🚀 Next Steps")
+        st.subheader(
+            "🚀 Next Steps"
+        )
 
 
         for i, item in enumerate(
@@ -544,7 +761,9 @@ JOB PDF
 
         st.divider()
 
-        st.header("✍️ AI Application")
+        st.header(
+            "✍️ AI Application"
+        )
 
 
         application = st.text_area(
