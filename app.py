@@ -255,8 +255,7 @@ IMPORTANT RULES:
    on the actual job listing and the user's
    actual skills.
 
-Respond in Japanese because the user prefers
-Japanese explanations.
+Respond in English.
 
 
 ========================================
@@ -414,7 +413,7 @@ Do not invent experience.
 
 Do not claim skills the user did not provide.
 
-Write in natural Japanese.
+Write in natural English.
 """
 
 
